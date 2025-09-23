@@ -192,6 +192,7 @@ UPROGS=\
 	$U/_usertests\
 	$U/_grind\
 	$U/_wc\
+	$U/_pingpong\
 	$U/_zombie\
 	$U/_logstress\
 	$U/_forphan\

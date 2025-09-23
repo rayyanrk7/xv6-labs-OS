@@ -16,6 +16,6 @@ main(int argc, char *argv[])
   }
 
   // pause() sleeps for given ticks
-  sleep(ticks);
+  pause(ticks);
   exit(0);
 }
