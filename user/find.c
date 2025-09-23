@@ -4,8 +4,6 @@
 #include "kernel/fs.h"
 #include "kernel/param.h" 
 
-char buf[512];
-
 void
 find(char *path, char *filename, int doexec, char *cmd[], int cmdargc)
 {
@@ -27,21 +25,30 @@ find(char *path, char *filename, int doexec, char *cmd[], int cmdargc)
 
   switch(st.type){
   case T_FILE:
-    if(strcmp(path+strlen(path)-strlen(filename), filename) == 0){
+    if(strlen(path) >= strlen(filename) && strcmp(path + strlen(path) - strlen(filename), filename) == 0){
       if(doexec){
         // build argv
         char *argv[MAXARG];
+	if(cmdargc + 2 > MAXARG){
+   	 fprintf(2, "too many arguments for -exec\n");
+   	 return;
+	}
         for(int i = 0; i < cmdargc; i++)
           argv[i] = cmd[i];
         argv[cmdargc] = path;
         argv[cmdargc+1] = 0;
 
-        if(fork() == 0){
-          exec(argv[0], argv);
-          fprintf(2, "exec %s failed\n", argv[0]);
-          exit(1);
-        }
-        wait(0);
+        int pid = fork();
+	if(pid < 0){
+   	 fprintf(2, "fork failed\n");
+   	 exit(1);
+	} else if(pid == 0){
+   	 exec(argv[0], argv);
+   	 fprintf(2, "exec %s failed\n", argv[0]);
+   	 exit(1);
+	} else {
+   	 wait(0);
+	}
       } else {
         printf("%s\n", path);
       }
@@ -61,8 +68,12 @@ find(char *path, char *filename, int doexec, char *cmd[], int cmdargc)
         continue;
       if(strcmp(de.name, ".") == 0 || strcmp(de.name, "..") == 0)
         continue;
-      memmove(p, de.name, DIRSIZ);
-      p[DIRSIZ] = 0;
+      int namelen = 0;
+      while(namelen < DIRSIZ && de.name[namelen] != '\0') {
+    	 namelen++;
+      }
+      memmove(p, de.name, namelen);
+      p[namelen] = 0;
       find(buf, filename, doexec, cmd, cmdargc);
     }
     break;
