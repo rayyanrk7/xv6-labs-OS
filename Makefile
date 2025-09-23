@@ -193,6 +193,7 @@ UPROGS=\
 	$U/_sleep\
 	$U/_sixfive\
 	$U/_usertests\
+	$U/_uptime\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\

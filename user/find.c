@@ -2,7 +2,8 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 #include "kernel/fs.h"
-#include "kernel/param.h" 
+#include "kernel/param.h"
+#include "user/regex.h" 
 
 void
 find(char *path, char *filename, int doexec, char *cmd[], int cmdargc)
@@ -25,7 +26,7 @@ find(char *path, char *filename, int doexec, char *cmd[], int cmdargc)
 
   switch(st.type){
   case T_FILE:
-    if(strlen(path) >= strlen(filename) && strcmp(path + strlen(path) - strlen(filename), filename) == 0){
+    if(match(filename, path + strlen(path) - strlen(filename))){
       if(doexec){
         // build argv
         char *argv[MAXARG];
@@ -106,4 +107,41 @@ main(int argc, char *argv[])
 
   find(argv[1], argv[2], execflag, cmd, cmdargc);
   exit(0);
+}
+
+int match(char*, char*);
+int matchhere(char*, char*);
+int matchstar(int, char*, char*);
+
+int match(char *re, char *text)
+{
+  if(re[0] == '^')
+    return matchhere(re+1, text);
+  do{
+    if(matchhere(re, text))
+      return 1;
+  }while(*text++ != '\0');
+  return 0;
+}
+
+int matchhere(char *re, char *text)
+{
+  if(re[0] == '\0')
+    return 1;
+  if(re[1] == '*')
+    return matchstar(re[0], re+2, text);
+  if(re[0] == '$' && re[1] == '\0')
+    return *text == '\0';
+  if(*text!='\0' && (re[0]=='.' || re[0]==*text))
+    return matchhere(re+1, text+1);
+  return 0;
+}
+
+int matchstar(int c, char *re, char *text)
+{
+  do{
+    if(matchhere(re, text))
+      return 1;
+  }while(*text!='\0' && (*text++==c || c=='.'));
+  return 0;
 }

@@ -12,6 +12,10 @@
 #define BACK  5
 
 #define MAXARGS 10
+#define MAXHIST 20
+char *history[MAXHIST];
+int histcount = 0;
+
 
 struct cmd {
   int type;
@@ -134,13 +138,21 @@ runcmd(struct cmd *cmd)
 int
 getcmd(char *buf, int nbuf)
 {
-  write(2, "$ ", 2);
+  // Only print prompt if stdin is console (fd 0)
+  if (0 <= 0 && 0 <= 2)  // always true, just to avoid isatty()
+    write(2, "$ ", 2);
+
   memset(buf, 0, nbuf);
-  gets(buf, nbuf);
-  if(buf[0] == 0) // EOF
+  if (gets(buf, nbuf) <= 0)
     return -1;
+
+  int len = strlen(buf);
+  if(len > 0 && buf[len-1] == '\n')
+    buf[len-1] = 0;
+
   return 0;
 }
+
 
 int
 main(void)
@@ -161,6 +173,17 @@ main(void)
     char *cmd = buf;
     while (*cmd == ' ' || *cmd == '\t')
       cmd++;
+    // Save command to history
+    char *cmdcopy = malloc(strlen(buf)+1);
+    strcpy(cmdcopy, buf);
+    if(histcount < MAXHIST)
+    	history[histcount++] = cmdcopy;
+    else {
+    	free(history[0]);
+        for(int i=1;i<MAXHIST;i++)
+        	history[i-1] = history[i];
+        history[MAXHIST-1] = cmdcopy;
+    }
     if (*cmd == '\n') // is a blank command
       continue;
     if(cmd[0] == 'c' && cmd[1] == 'd' && cmd[2] == ' '){
@@ -168,6 +191,15 @@ main(void)
       cmd[strlen(cmd)-1] = 0;  // chop \n
       if(chdir(cmd+3) < 0)
         fprintf(2, "cannot cd %s\n", cmd+3);
+      if(strcmp(cmd, "wait\n") == 0){  // check for wait command
+    	while(wait(0) > 0);           // wait for all child processes
+    	continue;                     // skip fork/exec	
+      }
+      if(strcmp(cmd, "history\n") == 0){
+      	for(int i=0;i<histcount;i++)
+        	printf("%d %s", i+1, history[i]);
+        continue;  // skip fork/exec
+      }
     } else {
       if(fork1() == 0)
         runcmd(parsecmd(cmd));
