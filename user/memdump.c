@@ -61,5 +61,52 @@ void
 memdump(char *fmt, char *data)
 {
   // Your code here.
+    char *ptr = data;
+    for(int i = 0; fmt[i]; i++){
+        switch(fmt[i]){
+        case 'i': { // 4-byte integer
+            int val = *(int*)ptr;
+            printf("%d\n", val);
+            ptr += 4;
+            break;
+        }
+        case 'p': { // 8-byte pointer
+            unsigned long val = *(unsigned long*)ptr;
+            printf("%lx\n", val);
+            ptr += 8;
+            break;
+        }
+        case 'h': { // 2-byte short
+            short val = *(short*)ptr;
+            printf("%d\n", val);
+            ptr += 2;
+            break;
+        }
+        case 'c': { // 1-byte char
+            char val = *ptr;
+            printf("%c\n", val);
+            ptr += 1;
+            break;
+        }
+        case 's': { // 8-byte pointer to string
+            char **pstr = (char**)ptr;
+            if(*pstr)
+                printf("%s\n", *pstr);
+            ptr += 8;
+            break;
+        }
+        case 'S': { // null-terminated string
+            printf("%s\n", ptr);
+            while(*ptr) ptr++; // advance to null
+            ptr++; // skip null
+            break;
+        }
+        default:
+            // unknown format, skip
+            break;
+        }
+    }
+
+
 
 }
