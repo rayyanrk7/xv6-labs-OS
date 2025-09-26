@@ -503,3 +503,18 @@ sys_pipe(void)
   }
   return 0;
 }
+uint64
+sys_isconsole(void)
+{
+	int fd;
+	struct file *f;
+	struct proc *p = myproc();
+
+	if(argint(0, &fd) < 0)
+		return -1;
+	if(fd < 0 || fd >= NOFILE || (f = p->ofile[fd]) == 0)
+		return -1;
+	if(f->type == FD_DEVICE && f->major == 1)
+		return 1;
+	return 0;
+}

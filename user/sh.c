@@ -82,7 +82,7 @@ runcmd(struct cmd *cmd)
       exit(1);
     exec(ecmd->argv[0], ecmd->argv);
     fprintf(2, "exec %s failed\n", ecmd->argv[0]);
-    break;
+    exit(1);
 
   case REDIR:
     rcmd = (struct redircmd*)cmd;
@@ -138,20 +138,20 @@ runcmd(struct cmd *cmd)
 int
 getcmd(char *buf, int nbuf)
 {
-  // Only print prompt if stdin is console (fd 0)
-  if (0 <= 0 && 0 <= 2)  // always true, just to avoid isatty()
-    write(2, "$ ", 2);
+    if(console(0))
+      write(2, "$ ", 2);
 
-  memset(buf, 0, nbuf);
-  if (gets(buf, nbuf) <= 0)
-    return -1;
+    memset(buf, 0, nbuf);
+    if(gets(buf, nbuf) <= 0)
+        return -1;  // EOF or error
 
-  int len = strlen(buf);
-  if(len > 0 && buf[len-1] == '\n')
-    buf[len-1] = 0;
+    int len = strlen(buf);
+    if(len > 0 && buf[len-1] == '\n')
+        buf[len-1] = 0;  // remove newline
 
-  return 0;
+    return 0;
 }
+
 
 
 int
@@ -174,36 +174,42 @@ main(void)
     while (*cmd == ' ' || *cmd == '\t')
       cmd++;
     // Save command to history
-    char *cmdcopy = malloc(strlen(buf)+1);
-    strcpy(cmdcopy, buf);
+    char *cmdcopy = malloc(strlen(cmd)+1);
+    strcpy(cmdcopy, cmd);
     if(histcount < MAXHIST)
     	history[histcount++] = cmdcopy;
     else {
     	free(history[0]);
         for(int i=1;i<MAXHIST;i++)
-        	history[i-1] = history[i];
+          history[i-1] = history[i];
         history[MAXHIST-1] = cmdcopy;
     }
-    if (*cmd == '\n') // is a blank command
-      continue;
-    if(cmd[0] == 'c' && cmd[1] == 'd' && cmd[2] == ' '){
-      // Chdir must be called by the parent, not the child.
-      cmd[strlen(cmd)-1] = 0;  // chop \n
-      if(chdir(cmd+3) < 0)
-        fprintf(2, "cannot cd %s\n", cmd+3);
-      if(strcmp(cmd, "wait\n") == 0){  // check for wait command
-    	while(wait(0) > 0);           // wait for all child processes
-    	continue;                     // skip fork/exec	
-      }
-      if(strcmp(cmd, "history\n") == 0){
-      	for(int i=0;i<histcount;i++)
-        	printf("%d %s", i+1, history[i]);
-        continue;  // skip fork/exec
-      }
-    } else {
+    if (*cmd == 0) continue; // is a blank command
+    printf("cmd: '%s'\n", cmd);
+    if(cmd[0] == 'c' && cmd[1] == 'd'){
+	    char *path = cmd + 2;
+	    if (cmd[2] == ' ') path++;
+	    printf("chdir path: '%s'\n", path);
+	    int ret = chdir(path);
+	    if(ret < 0)
+		    fprintf(2, "cannot cd %s (error %d)\n", path, ret);
+	    continue;
+    }
+    if(strcmp(cmd, "wait") == 0){  // check for wait command
+      while(wait(0) > 0);           // wait for all child processes
+      continue;      // skip fork/exec	
+    }	     //
+    if(strcmp(cmd, "history") == 0){
+      for(int i=0;i<histcount;i++)
+        printf("%d %s\n", i+1, history[i]);
+      continue;  // skip fork/exec
+    }
+    else {
       if(fork1() == 0)
+	printf("Executing: '%s'\n", cmd);      
         runcmd(parsecmd(cmd));
       wait(0);
+      printf("Parent waited\n");
     }
   }
   exit(0);
