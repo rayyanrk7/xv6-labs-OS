@@ -26,7 +26,14 @@ find(char *path, char *filename, int doexec, char *cmd[], int cmdargc)
 
   switch(st.type){
   case T_FILE:
-    if(match(filename, path + strlen(path) - strlen(filename))){
+    // helper to get last component of path
+  char* basename(char *path) {
+    char *p = path + strlen(path);
+    while(p >= path && *p != '/')
+      p--;
+    return p+1;
+    }
+    if(match(filename, basename(path))){
       if(doexec){
         // build argv
         char *argv[MAXARG];
