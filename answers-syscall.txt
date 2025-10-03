@@ -1,0 +1,28 @@
+Task 1
+
+Q1: Looking at the backtrace output, which function called syscall?  
+A1: The function `usertrap()` called `syscall()`.
+
+Q2: What is the value of p->trapframe->a7 and what does that value represent?  
+A2: The value was 0xf (15 in decimal). This represents the system call number.  
+    In this case, it corresponds to the `exec` system call.
+
+Q3: What was the previous mode that the CPU was in?  
+A3: The previous mode was **user mode**, as shown by the `sstatus` register.
+
+Q4: Why does the kernel crash? Hint: look at figure 3-3 in the text; is address 0 mapped in the kernel address space? Is that confirmed by the value in scause above? 
+A4: The kernel crashes because we replaced num = p->trapframe->a7; with num = *(int*)0;, which dereferences the null pointer (address 0).
+    In xv6, address 0 is not mapped in the kernel’s virtual address space.
+    The scause=0xd indicates a store/load page fault.
+    The stval=0x0 confirms the faulting memory address was 0x0, i.e., the null address.
+    Thus, the kernel panics since it attempted to access unmapped memory.
+
+Q5: Write down the assembly instruction the kernel is panicing at. Which register corresponds to the variable num? 
+A5: The faulting instruction was:
+    
+    80001cda:   00002683    lw a3,0(zero)
+    
+    The register `a3` corresponds to the variable `num`.
+
+Q6: What is the name of the process that was running when the kernel paniced? What is its process id (pid)?
+A6: The process name was `"init"` and its pid was 1.
