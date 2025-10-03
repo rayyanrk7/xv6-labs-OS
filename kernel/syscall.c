@@ -138,22 +138,35 @@ syscall(void)
   struct proc *p = myproc();
 
   num = p->trapframe->a7;
- // num = *(int *)0; deliberate crash for debugging lab
-
-  // If process has a sandbox mask and the syscall is masked, block it.
+  //num = *(int *)0; deliberate crash for debugging lab
+  // If process has a sandbox mask and the syscall is masked, block it…
   if (p->sandbox_mask & (1 << num)) {
-    // block syscall: return error (-1)
+
+    // Special case: allow open/exec if pathname matches sandbox_path
+    if (num == SYS_open || num == SYS_exec) {
+      char path[MAXPATH];
+
+      // fetch first string argument (the pathname)
+      if (argstr(0, path, sizeof(path)) >= 0) {
+        if (strncmp(path, p->sandbox_path, MAXPATH) == 0) {
+          // allowed, fall through to execute syscall
+          goto allowed;
+        }
+      }
+    }
+
+    // otherwise block syscall
     p->trapframe->a0 = -1;
     return;
   }
 
-  if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
-    // Use num to lookup the system call function for num, call it,
-    // and store its return value in p->trapframe->a0
+allowed:
+  if (num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     p->trapframe->a0 = syscalls[num]();
   } else {
     printf("%d %s: unknown sys call %d\n",
-            p->pid, p->name, num);
+           p->pid, p->name, num);
     p->trapframe->a0 = -1;
   }
 }
+
