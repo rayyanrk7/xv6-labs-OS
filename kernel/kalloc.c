@@ -10,14 +10,13 @@
 #include "riscv.h"
 #include "defs.h"
 
-// Define SUPERPGSIZE if it's not in memlayout.h
 #ifndef SUPERPGSIZE
 #define SUPERPGSIZE (2 * 1024 * 1024) // 2MB
 #endif
 
 void freerange(void *pa_start, void *pa_end);
-void superfree(void *pa); // Forward declaration
-void superfreerange(void *pa_start, void *pa_end); // Forward declaration
+void superfree(void *pa); 
+void superfreerange(void *pa_start, void *pa_end); 
 
 extern char end[]; // first address after kernel (kernel.ld)
 
@@ -41,8 +40,6 @@ struct {
   struct srun *freelist;
 } supermem;
 
-// --- Initialization and Range Allocation ---
-
 // Reserves 10 * 2MB = 20MB for superpages at the end of PHYSTOP.
 #define NUM_SUPERPAGES_RESERVED 10
 #define SUPERPAGE_RESERVED_SIZE (NUM_SUPERPAGES_RESERVED * SUPERPGSIZE)
@@ -58,7 +55,6 @@ freerange(void *pa_start, void *pa_end)
 void
 superfreerange(void *pa_start, void *pa_end)
 {
-  // Only add 2MB-aligned chunks.
   uint64 p = (uint64)pa_start;
   // Align start address to 2MB boundary
   if (p % SUPERPGSIZE)
@@ -77,18 +73,22 @@ kinit()
   initlock(&kmem.lock, "kmem");
   initlock(&supermem.lock, "supermem");
 
-  // Calculate the split point for the two pools.
-  // We reserve SUPERPAGE_RESERVED_SIZE at the top of memory for superpages.
+  // Calculate the split point for the two pools, ensuring 2MB alignment for the start.
   super_pa_start = (uint64)PHYSTOP - SUPERPAGE_RESERVED_SIZE;
+  // Ensure the superpage start is 2MB aligned
+  if (super_pa_start % SUPERPGSIZE != 0) {
+      super_pa_start = PGROUNDDOWN(super_pa_start);
+  }
+  
   standard_pa_end = super_pa_start;
 
-  // 1. Initialize the standard 4KB page allocator pool.
-  // This prevents double-initialization of memory with the superpage pool.
+  // 1. Initialize the standard 4KB page allocator pool (end to super_pa_start).
   freerange(end, (void*)standard_pa_end);
 
-  // 2. Initialize the 2MB superpage allocator pool with the reserved memory.
+  // 2. Initialize the 2MB superpage allocator pool (super_pa_start to PHYSTOP).
   superfreerange((void*)super_pa_start, (void*)PHYSTOP);
 }
+
 
 // --- 4 KB Page Allocator ---
 
@@ -99,11 +99,8 @@ kfree(void *pa)
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
-    
-  // NOTE: A more complex check could ensure this page isn't part of a superpage.
-  // We rely on the memory split in kinit for correctness.
 
-  memset(pa, 1, PGSIZE); // fill with junk to catch use-after-free
+  memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
 
@@ -125,7 +122,7 @@ kalloc(void)
   release(&kmem.lock);
 
   if(r)
-    memset((char*)r, 5, PGSIZE); // fill with junk to prevent leaks
+    memset((char*)r, 5, PGSIZE);
   return (void*)r;
 }
 
@@ -143,7 +140,7 @@ superalloc(void)
   release(&supermem.lock);
 
   if(r)
-    memset((char*)r, 0, SUPERPGSIZE); // clear entire 2 MB region
+    memset((char*)r, 0, SUPERPGSIZE); 
   return (void*)r;
 }
 
@@ -152,11 +149,10 @@ superfree(void *pa)
 {
   struct srun *r;
 
-  // Check alignment and bounds. Superpages MUST be 2MB aligned.
   if(((uint64)pa % SUPERPGSIZE) != 0 || (uint64)pa >= PHYSTOP)
     panic("superfree");
 
-  memset(pa, 1, SUPERPGSIZE); // fill with junk
+  memset(pa, 1, SUPERPGSIZE);
 
   r = (struct srun*)pa;
 
