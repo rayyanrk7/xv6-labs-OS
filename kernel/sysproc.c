@@ -7,6 +7,24 @@
 #include "proc.h"
 #include "vm.h"
 
+
+uint64
+sys_interpose(void)
+{
+    int mask;
+    char path[MAXPATH];
+
+    argint(0, &mask);
+    argstr(1, path, MAXPATH);
+
+    struct proc *p = myproc();
+    p->sandbox_mask = mask;
+    safestrcpy(p->allowed_path, path, MAXPATH);
+
+    return 0;
+}
+
+
 uint64
 sys_exit(void)
 {
@@ -104,19 +122,4 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
-}
-
-uint64
-sys_interpose(void)
-{
-    int mask;
-    char path[MAXPATH];   //used in next task 2
-
-    argint(0, &mask);
-    argstr(1, path, sizeof(path));
-
-    struct proc *p = myproc();
-    p->sandbox_mask = mask;   // store mask in new field we’ll add
-    safestrcpy(p->sandbox_path, path, sizeof(p->sandbox_path));
-    return 0;
 }

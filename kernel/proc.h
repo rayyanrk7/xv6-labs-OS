@@ -83,6 +83,8 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
+  uint sandbox_mask;
+  char allowed_path[MAXPATH];
   struct spinlock lock;
 
   // p->lock must be held when using these:
@@ -91,11 +93,6 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
-  uint sandbox_mask;   // bitmask of restricted syscalls
-  char sandbox_path[MAXPATH];    // allowed path (if dash "-" means no path)
-  //uint sandbox_mask;                    sandbox syscall mask
-  //char sandbox_path[MAXPATH];   sandbox allowed pathname
-
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process

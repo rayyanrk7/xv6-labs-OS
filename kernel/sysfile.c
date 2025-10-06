@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "syscall.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -312,7 +313,22 @@ sys_open(void)
 
   argint(1, &omode);
   if((n = argstr(0, path, MAXPATH)) < 0)
-    return -1;
+    {return -1;}
+  
+    // Path-based sandboxing: if open is masked, only allow the allowed_path
+  struct proc *p = myproc();
+  if ((p->sandbox_mask & (1 << SYS_open)) != 0) {
+    int match = 1;
+    for (int i = 0; i < MAXPATH; i++) {
+      if (path[i] != p->allowed_path[i]) { match = 0; break; }
+      if (path[i] == '\0') break;
+    }
+    if (!match) {
+      // Reject the open
+      return -1;
+    }
+  }
+
 
   begin_op();
 
@@ -442,6 +458,21 @@ sys_exec(void)
   if(argstr(0, path, MAXPATH) < 0) {
     return -1;
   }
+
+  struct proc *p = myproc();
+  if ((p->sandbox_mask & (1 << SYS_exec)) != 0) {
+    int match = 1;
+    for (int i = 0; i < MAXPATH; i++) {
+      if (path[i] != p->allowed_path[i]) { match = 0; break; }
+      if (path[i] == '\0') break;
+    }
+    if (!match) {
+      // Reject the exec
+      return -1;
+    }
+  }
+
+
   memset(argv, 0, sizeof(argv));
   for(i=0;; i++){
     if(i >= NELEM(argv)){

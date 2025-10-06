@@ -26,7 +26,6 @@ int pause(int);
 int uptime(void);
 int interpose(int mask, const char *path);
 
-
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);

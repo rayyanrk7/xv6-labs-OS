@@ -284,8 +284,9 @@ kfork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
-
   np->sandbox_mask = p->sandbox_mask;
+  safestrcpy(np->allowed_path, p->allowed_path, sizeof(np->allowed_path));
+
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
