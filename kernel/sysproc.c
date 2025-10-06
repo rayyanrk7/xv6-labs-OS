@@ -1,3 +1,4 @@
+// kernel/sysproc.c
 #include "types.h"
 #include "riscv.h"
 #include "param.h"
@@ -5,10 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
-#ifdef PGTBL_SOL
-#include "riscv.h"
-#endif
-#include "vm.h"
+#include "vm.h" // For vmprint and pgpte
 
 uint64
 sys_exit(void)
@@ -22,6 +20,9 @@ sys_exit(void)
 uint64
 sys_getpid(void)
 {
+  // For Task 2: Speed up system calls, the userspace code (ugetpid)
+  // will now try to read the PID from the shared USYSCALL page first.
+  // This kernel function remains unchanged, as it's the fallback.
   return myproc()->pid;
 }
 
@@ -39,6 +40,9 @@ sys_wait(void)
   return kwait(p);
 }
 
+// System call to change the size of the process's address space.
+// Argument n is the amount to grow (positive) or shrink (negative).
+// Argument t is the allocation type (SBRK_EAGER or SBRK_LAZY).
 uint64
 sys_sbrk(void)
 {
@@ -50,18 +54,20 @@ sys_sbrk(void)
   argint(1, &t);
   addr = myproc()->sz;
 
+  // The process of growing/shrinking the memory (and potentially using
+  // superpages, if growproc handles it) is delegated to growproc().
   if(t == SBRK_EAGER || n < 0) {
     if(growproc(n) < 0) {
       return -1;
     }
   } else {
-    // Lazily allocate memory for this process: increase its memory
-    // size but don't allocate memory. If the processes uses the
-    // memory, vmfault() will allocate it.
+    // Lazily allocate memory: increase size but don't map pages.
+    // Memory will be mapped on demand in vmfault().
     if(addr + n < addr)
       return -1;
     myproc()->sz += n;
   }
+  
   return addr;
 }
 
@@ -70,7 +76,6 @@ sys_pause(void)
 {
   int n;
   uint ticks0;
-
 
   argint(0, &n);
   if(n < 0)
@@ -89,34 +94,39 @@ sys_pause(void)
 }
 
 
-#ifdef LAB_PGTBL
+// TASK 1: Inspect a user-process page table
 int
 sys_pgpte(void)
 {
   uint64 va;
-  struct proc *p;  
+  struct proc *p;
 
   p = myproc();
   argaddr(0, &va);
-  pte_t *pte = pgpte(p->pagetable, va);
+  
+  // pgpte is a helper function defined in vm.c to get the PTE
+  // for a given virtual address.
+  pte_t *pte = pgpte(p->pagetable, va); 
+  
   if(pte != 0) {
       return (uint64) *pte;
   }
   return 0;
 }
-#endif
 
-#ifdef LAB_PGTBL
+// TASK 3: Print a page table
 int
 sys_kpgtbl(void)
 {
-  struct proc *p;  
+  struct proc *p;
 
   p = myproc();
+  
+  // vmprint is the function you implemented in vm.c
   vmprint(p->pagetable);
+  
   return 0;
 }
-#endif
 
 
 uint64

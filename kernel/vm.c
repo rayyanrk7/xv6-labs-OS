@@ -1,3 +1,4 @@
+// kernel/vm.c
 #include "param.h"
 #include "types.h"
 #include "memlayout.h"
@@ -14,7 +15,6 @@
 pagetable_t kernel_pagetable;
 
 extern char etext[];  // kernel.ld sets this to end of kernel code.
-
 extern char trampoline[]; // trampoline.S
 
 // Make a direct-map page table for the kernel.
@@ -104,6 +104,7 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
       pagetable = (pagetable_t)PTE2PA(*pte);
 #ifdef LAB_PGTBL
       if(PTE_LEAF(*pte)) {
+        // a leaf at higher level (superpage) -- return it
         return pte;
       }
 #endif
@@ -139,7 +140,6 @@ walkaddr(pagetable_t pagetable, uint64 va)
   pa = PTE2PA(*pte);
   return pa;
 }
-
 
 #if defined(LAB_PGTBL) || defined(SOL_MMAP) || defined(SOL_COW)
 // Recursively print page table entries
@@ -182,8 +182,6 @@ vmprint(pagetable_t pagetable)
   vmprintwalk(pagetable, 0, 0);
 }
 #endif
-
-
 
 // add a mapping to the kernel page table.
 // only used when booting.
@@ -263,7 +261,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if((*pte & PTE_V) == 0)  // has physical page been allocated?
       continue;
     sz = PGSIZE;
-    if(PTE_FLAGS(*pte) == PTE_V)
+    if((*pte & (PTE_R|PTE_W|PTE_X)) == 0)
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);
@@ -296,7 +294,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
     }
 #ifndef LAB_SYSCALL
     memset(mem, 0, sz);
- #endif
+#endif
     if(mappages(pagetable, a, sz, (uint64)mem, PTE_R|PTE_U|xperm) != 0){
       kfree(mem);
       uvmdealloc(pagetable, a, oldsz);
@@ -433,7 +431,6 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
       return -1;
     }
 
-
     // forbid copyout over read-only user text pages.
     if((*pte & PTE_W) == 0)
       return -1;
@@ -521,9 +518,6 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   }
 }
 
-
-
-
 // allocate and map user memory if process is referencing a page
 // that was lazily allocated in sys_sbrk().
 // returns 0 if va is invalid or already mapped, or if
@@ -545,7 +539,7 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
   if(mem == 0)
     return 0;
   memset((void *) mem, 0, PGSIZE);
-  if (mappages(p->pagetable, va, PGSIZE, mem, PTE_W|PTE_U|PTE_R) != 0) {
+  if (mappages(pagetable, va, PGSIZE, mem, PTE_W|PTE_U|PTE_R) != 0) {
     kfree((void *)mem);
     return 0;
   }
@@ -563,8 +557,6 @@ ismapped(pagetable_t pagetable, uint64 va) {
   }
   return 0;
 }
-
-
 
 #ifdef LAB_PGTBL
 pte_t*
