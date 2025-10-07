@@ -12,7 +12,7 @@ static int loadseg(pde_t *, uint64, struct inode *, uint, uint);
 // map ELF permissions to PTE permission bits.
 int flags2perm(int flags)
 {
-    int perm = PTE_U | PTE_R;
+    int perm = 0;
     if(flags & 0x1)
       perm = PTE_X;
     if(flags & 0x2)

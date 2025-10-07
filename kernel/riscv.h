@@ -377,12 +377,8 @@ typedef uint64 *pagetable_t; // 512 PTEs
 
 
 
-//#if defined(LAB_MMAP) || defined(LAB_PGTBL) || defined(LAB_COW)
-//#define PTE_LEAF(pte) (((pte) & PTE_R) | ((pte) & PTE_W) | ((pte) & PTE_X))
-//#endif
-//
 #if defined(LAB_MMAP) || defined(LAB_PGTBL) || defined(LAB_COW)
-#define PTE_LEAF(pte) (((pte) & (PTE_R | PTE_W | PTE_X)) != 0)
+#define PTE_LEAF(pte) (((pte) & PTE_R) | ((pte) & PTE_W) | ((pte) & PTE_X))
 #endif
 
 // shift a physical address to the right place for a PTE.
@@ -402,3 +398,6 @@ typedef uint64 *pagetable_t; // 512 PTEs
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
+
+#define pa2kva(pa) ((void *)((uint64)(pa) + KERNBASE)) // ADDED BY SAFEGUARD
+#define kva2pa(va) ((uint64)(va) - KERNBASE) // ADDED BY SAFEGUARD

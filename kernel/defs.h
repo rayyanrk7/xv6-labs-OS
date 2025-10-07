@@ -151,8 +151,6 @@ void            argaddr(int, uint64 *);
 int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
 void            syscall();
-void		*superalloc(void);
-void		superfree(void *pa);
 
 // trap.c
 extern uint     ticks;

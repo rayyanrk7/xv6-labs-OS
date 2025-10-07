@@ -1,7 +1,6 @@
-// kernel/kalloc.c
 // Physical memory allocator, for user processes,
-// kernel stacks, page-table pages, and pipe buffers.
-// Also supports 2 MB "superpages" for the pgtbl lab.
+// kernel stacks, page-table pages,
+// and pipe buffers. Allocates whole 4096-byte pages.
 
 #include "types.h"
 #include "param.h"
@@ -9,18 +8,20 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "memlayout.h"
 
-#ifndef SUPERPGSIZE
-#define SUPERPGSIZE (2 * 1024 * 1024) // 2MB
-#endif
+// ADDED BY SAFEGUARD
+static void *super_free_list[N_SUPERPAGES];
+static int super_free_cnt = 0;
 
-void freerange(void *pa_start, void *pa_end);
-void superfree(void *pa); 
-void superfreerange(void *pa_start, void *pa_end); 
 
-extern char end[]; // first address after kernel (kernel.ld)
+// ADDED BY SAFEGUARD, slight name change to avoid conflict
+void freerange(void *vstart, void *vend);
+// void freerange(void *pa_start, void *pa_end);
 
-// 4KB page allocator structs
+extern char end[]; // first address after kernel.
+                   // defined by kernel.ld.
+
 struct run {
   struct run *next;
 };
@@ -30,68 +31,63 @@ struct {
   struct run *freelist;
 } kmem;
 
-// 2MB superpage allocator structs
-struct srun {
-  struct srun *next;
-};
-
-struct {
-  struct spinlock lock;
-  struct srun *freelist;
-} supermem;
-
-// Reserves 10 * 2MB = 20MB for superpages at the end of PHYSTOP.
-#define NUM_SUPERPAGES_RESERVED 10
-#define SUPERPAGE_RESERVED_SIZE (NUM_SUPERPAGES_RESERVED * SUPERPGSIZE)
-
-void
-freerange(void *pa_start, void *pa_end)
-{
-  char *p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree(p);
-}
-
-void
-superfreerange(void *pa_start, void *pa_end)
-{
-  uint64 p = (uint64)pa_start;
-  // Align start address to 2MB boundary
-  if (p % SUPERPGSIZE)
-    p += SUPERPGSIZE - (p % SUPERPGSIZE);
-
-  for (; p + SUPERPGSIZE <= (uint64)pa_end; p += SUPERPGSIZE)
-    superfree((void*)p);
-}
-
 void
 kinit()
 {
-  uint64 standard_pa_end;
-  uint64 super_pa_start;
-
   initlock(&kmem.lock, "kmem");
-  initlock(&supermem.lock, "supermem");
-
-  // Calculate the split point for the two pools, ensuring 2MB alignment for the start.
-  super_pa_start = (uint64)PHYSTOP - SUPERPAGE_RESERVED_SIZE;
-  // Ensure the superpage start is 2MB aligned
-  if (super_pa_start % SUPERPGSIZE != 0) {
-      super_pa_start = PGROUNDDOWN(super_pa_start);
-  }
-  
-  standard_pa_end = super_pa_start;
-
-  // 1. Initialize the standard 4KB page allocator pool (end to super_pa_start).
-  freerange(end, (void*)standard_pa_end);
-
-  // 2. Initialize the 2MB superpage allocator pool (super_pa_start to PHYSTOP).
-  superfreerange((void*)super_pa_start, (void*)PHYSTOP);
+  freerange(end, (void*)PHYSTOP);
 }
 
+// ADDED BY SAFEGUARD
+void
+freerange(void *vstart, void *vend)
+{
+  char *p = (char*)PGROUNDUP((uint64)vstart);
+  for (; (uint64)p + PGSIZE <= (uint64)vend; ) {
+    if (super_free_cnt < N_SUPERPAGES &&
+        ((uint64)p & (SUPERPAGE_SIZE - 1)) == 0 &&
+        (uint64)p + SUPERPAGE_SIZE <= (uint64)vend) {
+      super_free_list[super_free_cnt++] = p;
+      p = (char*)((uint64)p + SUPERPAGE_SIZE);
+      continue;
+    }
+    kfree(p);
+    p += PGSIZE;
+  }
+}
 
-// --- 4 KB Page Allocator ---
+// void
+// freerange(void *pa_start, void *pa_end)
+// {
+//   char *p;
+//   p = (char*)PGROUNDUP((uint64)pa_start);
+//   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
+//     kfree(p);
+// }
 
+// ADDED BY SAFEGUARD
+void *
+superalloc(void)
+{
+  if (super_free_cnt == 0)
+    return 0;
+  return super_free_list[--super_free_cnt];
+}
+
+// ADDED BY SAFEGUARD
+void
+superfree(void *pa)
+{
+  if (super_free_cnt >= N_SUPERPAGES)
+    panic("superfree: overflow");
+
+  super_free_list[super_free_cnt++] = pa;
+}
+
+// Free the page of physical memory pointed at by pa,
+// which normally should have been returned by a
+// call to kalloc().  (The exception is when
+// initializing the allocator; see kinit above.)
 void
 kfree(void *pa)
 {
@@ -100,6 +96,7 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
@@ -110,6 +107,9 @@ kfree(void *pa)
   release(&kmem.lock);
 }
 
+// Allocate one 4096-byte page of physical memory.
+// Returns a pointer that the kernel can use.
+// Returns 0 if the memory cannot be allocated.
 void *
 kalloc(void)
 {
@@ -122,42 +122,6 @@ kalloc(void)
   release(&kmem.lock);
 
   if(r)
-    memset((char*)r, 5, PGSIZE);
+    memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
-}
-
-// --- 2 MB Superpage Allocator ---
-
-void *
-superalloc(void)
-{
-  struct srun *r;
-
-  acquire(&supermem.lock);
-  r = supermem.freelist;
-  if(r)
-    supermem.freelist = r->next;
-  release(&supermem.lock);
-
-  if(r)
-    memset((char*)r, 0, SUPERPGSIZE); 
-  return (void*)r;
-}
-
-void
-superfree(void *pa)
-{
-  struct srun *r;
-
-  if(((uint64)pa % SUPERPGSIZE) != 0 || (uint64)pa >= PHYSTOP)
-    panic("superfree");
-
-  memset(pa, 1, SUPERPGSIZE);
-
-  r = (struct srun*)pa;
-
-  acquire(&supermem.lock);
-  r->next = supermem.freelist;
-  supermem.freelist = r;
-  release(&supermem.lock);
 }
