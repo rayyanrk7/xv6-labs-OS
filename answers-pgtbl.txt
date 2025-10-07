@@ -1,0 +1,27 @@
+1. A typical print_pgtbl output enumerates all final (leaf) entries in a process's page table.
+
+VA Range (Example)	Logical Content	Permissions (RISC-V PTE Flags)	Brief Explanation
+0x0 - 0x...	User Program Text/Code	V∣R∣X∣U	Valid, Read, Execute, User (The program instructions).
+0x... - 0x...	User Data/Heap (BSS)	V∣R∣W∣U	Valid, Read, Write, User (The program data and dynamically allocated memory).
+TRAPFRAME (MAXVA−2PG)	Trap Frame Structure	V∣R∣W	Valid, Read, Write (Used by the kernel to save/restore user context during traps/interrupts). No U flag (kernel-only access).
+USYSCALL (MAXVA−3PG)	User/Kernel Shared Page	V∣R∣W∣U	Valid, Read, Write, User (A page where the kernel writes small, non-sensitive data for user programs to read without a system call trap).
+TRAMPOLINE (MAXVA−1PG)	Trap Handling Code	V∣R∣X	Valid, Read, Execute (The kernel's trap entry/exit code). No U flag (kernel-only code).
+
+
+2. The user-kernel shared page is used to avoid the overhead of a full system call trap (ecall) for simple, non-sensitive, read-only kernel data.
+The system calls that benefit most are:
+
+sys_getpid(): The process ID (pid) can be stored on the shared page. The user library function can read the pid directly from memory instead of executing an ecall.
+
+sys_uptime(): The kernel can periodically write the current system time/uptime to the shared page. The user program reads this value directly, bypassing the trap/switch entirely.
+
+3. vmprint traverses the page table hierarchy (L2 → L1 → L0). A leaf page is any entry that points to a physical memory page rather than a lower-level page table.
+
+vmprint Leaf Entry	Logical Content	Permissions	Relation to print_pgtbl
+L0/L1 Leaf	User Text/Data/Stack	Varies (e.g., R∣W∣U)	Identical Final Mapping: The leaf entry is the exact final mapping listed in the print_pgtbl output.
+L1 Leaf (Superpage)	Large, Aligned Memory Block	e.g., V∣R∣W∣U	Single Entry for 2MB: A 2MB superpage is a single L1 leaf entry that logically corresponds to 512 consecutive 4KB entries in the print_pgtbl output.
+
+The key difference is that vmprint reveals the page table structure:
+A non-leaf entry in vmprint is a pointer to the next level's page table.
+A leaf entry is the actual memory mapping.
+Both outputs describe the same set of final virtual-to-physical mappings for the process.
