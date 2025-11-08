@@ -312,7 +312,7 @@ r_sp()
   return x;
 }
 
-static inline uint64
+static inline uint64 //t2 function
 r_fp()
 {
   uint64 x;
