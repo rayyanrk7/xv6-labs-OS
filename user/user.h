@@ -62,6 +62,8 @@ int statistics(void*, int);
 // printf.c
 void fprintf(int, const char*, ...) __attribute__ ((format (printf, 2, 3)));
 void printf(const char*, ...) __attribute__ ((format (printf, 1, 2)));
+int sigalarm(int ticks, void (*handler)()); //t3 declaration
+int sigreturn(void); //t3 declaration
 
 // umalloc.c
 void* malloc(uint);

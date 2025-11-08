@@ -91,11 +91,48 @@ usertrap(void)
 
   // return to trampoline.S; satp value in a0.
   return satp;
+
+if(which_dev == 2) { // Timer interrupt
+    struct proc *p = myproc();
+
+    // Check interval > 0, handler set, AND NOT ALREADY RUNNING (Fixes Test 2)
+    if(p->alarm_interval > 0 && p->alarm_handler != 0 && p->alarm_is_running == 0) {
+      p->alarm_ticks_left--;
+      
+      if(p->alarm_ticks_left <= 0) {
+        
+        // 1. RE-ARM: Reset tick counter
+        p->alarm_ticks_left = p->alarm_interval;
+
+        // 2. Set running flag
+        p->alarm_is_running = 1;
+
+        // 3. SAVE CONTEXT: Allocate memory for and save the current trapframe
+        p->alarm_tf = (struct trapframe*)kalloc();
+        if (p->alarm_tf == 0) {
+            p->killed = 1; 
+        } else {
+            // Copy current trapframe (active state) to the saved state
+            memmove(p->alarm_tf, p->trapframe, sizeof(struct trapframe));
+            
+            // 4. DIVERT EXECUTION (Fixes Test 1): 
+            // Change the Program Counter (epc) to the user handler function address.
+            p->trapframe->epc = p->alarm_handler;
+            
+            // Note: The hardware interrupt is now complete. When the kernel returns
+            // to user space, the CPU will jump to p->alarm_handler.
+        }
+      }
+    }
+} 
+  // Call sched if the process was killed or we yield/switch.
+  if(p->killed)
+    kexit(-1);
 }
 
-//
-// set up trapframe and control registers for a return to user space
-//
+  //
+  // set up trapframe and control registers for a return to user space
+  //
 void
 prepare_return(void)
 {

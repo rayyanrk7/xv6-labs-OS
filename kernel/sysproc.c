@@ -80,7 +80,7 @@ sys_pause(void)
   argint(0, &n);
   if(n < 0)
     n = 0;
-  backtrace(); //t2 backtrace call in sys_pause for test
+ // backtrace(); //t2 backtrace call in sys_pause for test - commenting out for t3 cuz it shows in qemu
   acquire(&tickslock);
   ticks0 = ticks;
   while(ticks - ticks0 < n){
@@ -150,4 +150,87 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// Implements sigalarm(interval, handler)
+uint64
+sys_sigalarm(void)
+{
+  int ticks;
+  uint64 handler;
+
+  // REMOVE THE CHECK: argint is now void (or handles errors internally)
+  argint(0, &ticks); 
+  
+  // REMOVE THE CHECK: argaddr is now void (or handles errors internally)
+  argaddr(1, &handler); 
+
+  struct proc *p = myproc();
+  
+  // 1. Store interval and handler address
+  p->alarm_interval = ticks;
+  p->alarm_handler = handler;
+  
+  // 2. Initialize tick counter
+  p->alarm_ticks_left = ticks; 
+  p->alarm_is_running = 0; // Ensure this is also initialized/set correctly
+
+  return 0;
+}
+
+/*
+// Implements sigreturn() to restore the saved context
+uint64
+sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  
+  // Check if there is a context to restore
+  if (p->alarm_tf == 0) {
+    // Should not happen if handler was called correctly
+    return -1; 
+  }
+
+  // 1. Restore the trapframe state from the saved copy
+  // Copy saved trapframe back into the active trapframe
+  memmove(p->trapframe, p->alarm_tf, sizeof(struct trapframe));
+  
+  // 2. Free the saved trapframe memory
+  kfree((void*)p->alarm_tf);
+  p->alarm_tf = 0;
+  
+  // 3. Reset the running flag
+  p->alarm_is_running = 0;
+
+  // 4. Restore a0 (System call return value should be preserved, but sigreturn returns 0)
+  p->trapframe->a0 = 0; 
+
+  return 0;
+}
+*/
+
+// kernel/sysproc.c (Full implementation for sys_sigreturn)
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  
+  // Check if there is a context to restore
+  if (p->alarm_tf == 0) {
+    return -1; 
+  }
+
+  // 1. Restore the process state: Copy the saved trapframe back into the active one
+  memmove(p->trapframe, p->alarm_tf, sizeof(struct trapframe));
+  
+  // 2. Clean up and reset flags
+  kfree((void*)p->alarm_tf); // Free the memory allocated for the saved state
+  p->alarm_tf = 0;
+  p->alarm_is_running = 0; // Reset flag (Fixes Test 2)
+
+  // 3. Ensure a0 is restored to 0, which is the expected return value for sigreturn
+  p->trapframe->a0 = 0; 
+
+  return 0;
 }

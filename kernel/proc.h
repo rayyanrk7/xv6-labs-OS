@@ -106,4 +106,11 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   struct usyscall *usyscall; // Syscall interface page ADDED BY SAFEGUARD 
+
+  int alarm_interval;          // N ticks for alarm
+  uint64 alarm_handler;        // Address of user alarm function fn()
+  int alarm_ticks_left;        // Ticks left until handler is called
+  int alarm_is_running;        // Flag to prevent re-entrant calls (for test2)
+  struct trapframe *alarm_tf;  // Saved trapframe state pointer for sigreturn
+
 };

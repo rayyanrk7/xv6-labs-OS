@@ -48,3 +48,5 @@ entry("send");
 entry("recv");
 entry("pgpte");
 entry("kpgtbl");
+entry("sigalarm"); #t3
+entry("sigreturn"); #t3
