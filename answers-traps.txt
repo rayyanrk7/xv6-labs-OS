@@ -1,0 +1,18 @@
+Q1: Which registers contain arguments?
+The first six arguments are passed in registers a0 through a5. 57616 is held in register a1.
+
+Q2: Where is the call to f? Where is the call to g?
+The call to f is inlined. The call to g appears as 'call g' (or jalr).
+
+Q3: At what address is printf located?
+printf is located at address 0x80002930.
+
+Q4: What value is in ra just after jalr to printf?
+The ra register holds the address of the instruction immediately following the jalr instruction.
+
+Q5: Output and Big-Endian value for i.
+Output: He010 World.
+Big-Endian i: 0x726c6400. 57616 does not change.
+
+Q6: printf("x=%d y=%d", 3); output after 'y='?
+It prints a garbage value. printf expects two arguments but only receives one (3), so it reads the second from an uninitialized register (a2) or stack location.
