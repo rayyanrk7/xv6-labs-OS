@@ -135,39 +135,15 @@ printf(char *fmt, ...)
 
 // kernel/printf.c
 
-void
-backtrace(void)
+void backtrace(void) //t2 backtrace function
 {
-  // Read the current frame pointer (s0).
-  uint64 fp = r_fp(); 
-  
+uint64 fp = r_fp();
+  uint64 stack_base = PGROUNDDOWN(fp);
   printf("backtrace:\n");
-
-  // KERNBASE is the lowest valid address for the kernel (0x80000000).
-  // A valid frame pointer must be > KERNBASE.
-  // We stop the loop when the chain breaks (saved_fp = 0).
-  while (fp != 0 && fp > KERNBASE) {
-    
-    // Safety check for reading: need at least 16 bytes for ra and saved fp.
-    if (fp < KERNBASE + 16) break;
-    
-    // 1. Get the saved Return Address (ra) at fp - 8
-    uint64 saved_ra = *(uint64*)(fp - 8);
-
-    // 2. Print the return address
-    printf("0x%p\n", (void*)saved_ra);
-
-    // 3. Get the saved Frame Pointer (s0/fp of the caller) at fp - 16
-    uint64 saved_fp = *(uint64*)(fp - 16);
-
-    // 4. Move to the caller's stack frame.
-    // The chain is unwinding UP to a higher address in the kernel.
-    // We break if the pointer is null or points to an address lower than the current frame.
-    if (saved_fp == 0 || saved_fp <= fp) {
-        break;
-    }
-    
-    fp = saved_fp;
+  while(fp != 0 && fp >= stack_base){
+    uint64 ra = *(uint64*)(fp - 8); 
+    printf("%p\n", (void *)ra);
+    fp = *(uint64*)(fp - 16);
   }
 }
 

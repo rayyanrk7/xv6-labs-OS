@@ -80,8 +80,8 @@ sys_pause(void)
   argint(0, &n);
   if(n < 0)
     n = 0;
- // backtrace(); //t2 backtrace call in sys_pause for test - commenting out for t3 cuz it shows in qemu
-  acquire(&tickslock);
+  backtrace(); //t2 backtrace call in sys_pause for test - commenting out for t3 cuz it shows in qemu
+    acquire(&tickslock);
   ticks0 = ticks;
   while(ticks - ticks0 < n){
     if(killed(myproc())){
